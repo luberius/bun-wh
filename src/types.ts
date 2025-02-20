@@ -18,7 +18,7 @@ export interface ProjectConfig {
   postExtract?: string[];
   preRollback?: string[];
   branch?: string;
-  assetName: string;
+  asset: string;
 }
 
 export interface Config {

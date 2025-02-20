@@ -59,12 +59,12 @@ export class ReleaseManager {
 
     const releaseData: any = await response.json();
     const asset = releaseData.assets.find(
-      (asset: any) => asset.name === this.config.assetName,
+      (asset: any) => asset.name === this.config.asset,
     );
 
     if (!asset) {
       throw new Error(
-        `Asset ${this.config.assetName} not found in release ${releaseInfo.tagName}`,
+        `Asset ${this.config.asset} not found in release ${releaseInfo.tagName}`,
       );
     }
 
@@ -126,7 +126,7 @@ export class ReleaseManager {
 
     try {
       // Create a temporary file for the zip
-      const zipPath = join(targetDir, "release.zip");
+      const zipPath = join(targetDir, this.config.asset);
       await Bun.write(zipPath, zipBuffer);
 
       // Use Node's built-in child_process to unzip
