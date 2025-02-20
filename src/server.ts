@@ -87,6 +87,8 @@ async function handleRelease(
       isPrerelease: release.release.prerelease,
       repositoryName: release.repository.full_name,
       targetCommitish: release.release.target_commitish,
+      repoName: release.repository.name,
+      repoOwner: release.repository.owner.login,
     };
 
     const releaseManager = new ReleaseManager(
