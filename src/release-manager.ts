@@ -94,7 +94,7 @@ export class ReleaseManager {
       }
 
       // Cleanup old releases
-      // await this.cleanup();
+      await this.cleanup();
 
       return releaseDir;
     } catch (error) {
