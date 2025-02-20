@@ -1,10 +1,27 @@
 import { join } from "path";
 import type { ProjectConfig } from "./types";
 import type { ReleaseInfo } from "./types";
-import { executeCommands, createSymlink } from "./utils";
+import { executeCommands } from "./utils";
 import logger from "./logger";
 import type pino from "pino";
-import { mkdir, readdir, realpath } from "node:fs/promises";
+import { mkdir, readdir, realpath, rm, symlink } from "node:fs/promises";
+
+// Improved createSymlink function that handles existing directories
+async function createSymlink(target: string, link: string): Promise<void> {
+  try {
+    // Remove existing symlink or directory
+    try {
+      await rm(link, { recursive: true, force: true });
+    } catch (error) {
+      // Ignore errors if the link doesn't exist
+    }
+
+    // Create the new symlink
+    await symlink(target, link);
+  } catch (error) {
+    throw new Error(`Failed to create symlink: ${(error as any).message}`);
+  }
+}
 
 export class ReleaseManager {
   private config: ProjectConfig;
@@ -48,13 +65,20 @@ export class ReleaseManager {
       this.logger.info("Release downloaded and extracted");
 
       // Backup current deployment
-      if (await Bun.file(currentLink).exists()) {
-        const currentPath = await realpath(currentLink);
-        await createSymlink(currentPath, rollbackLink);
-        this.logger.info({ currentPath, rollbackLink }, "Created backup");
+      try {
+        if (await Bun.file(currentLink).exists()) {
+          const currentPath = await realpath(currentLink);
+          await createSymlink(currentPath, rollbackLink);
+          this.logger.info({ currentPath, rollbackLink }, "Created backup");
+        }
+      } catch (error) {
+        this.logger.warn(
+          { error },
+          "Failed to create backup, continuing deployment",
+        );
       }
 
-      // Create/Update symlink
+      // Create/Update symlink with improved error handling
       await createSymlink(releaseDir, currentLink);
       this.logger.info(`Updated current symlink to: ${releaseDir}`);
 
