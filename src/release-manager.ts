@@ -4,7 +4,7 @@ import type { ReleaseInfo } from "./types";
 import { executeCommands, createSymlink } from "./utils";
 import logger from "./logger";
 import type pino from "pino";
-import { readdir, realpath } from "node:fs/promises";
+import { mkdir, readdir, realpath } from "node:fs/promises";
 
 export class ReleaseManager {
   private config: ProjectConfig;
@@ -37,10 +37,11 @@ export class ReleaseManager {
 
     try {
       // Ensure directories exist
-      await Bun.write(this.projectDir, "");
-      await Bun.write(join(this.baseDir, "current"), "");
-      await Bun.write(join(this.baseDir, "rollback"), "");
-      await Bun.write(releaseDir, "");
+      await mkdir(join(this.baseDir, "releases"), { recursive: true });
+      await mkdir(this.projectDir, { recursive: true });
+      await mkdir(join(this.baseDir, "current"), { recursive: true });
+      await mkdir(join(this.baseDir, "rollback"), { recursive: true });
+      await mkdir(releaseDir, { recursive: true });
 
       // Download and extract release
       await this.downloadAndExtract(releaseInfo.zipUrl, releaseDir);
@@ -104,13 +105,17 @@ export class ReleaseManager {
       const zipPath = join(targetDir, "release.zip");
       await Bun.write(zipPath, zipBuffer);
 
+      // Use Node's built-in child_process to unzip
       await new Promise((resolve, reject) => {
-        Bun.spawn(["unzip", "-qq", "-o", zipPath, "-d", targetDir], {
-          onExit: (_, exitCode, __, ___) => {
-            if (exitCode === 0) resolve(undefined);
-            else reject(new Error(`unzip failed with code ${exitCode}`));
+        const unzip = Bun.spawn(
+          ["unzip", "-qq", "-o", zipPath, "-d", targetDir],
+          {
+            onExit: (_, exitCode, __, ___) => {
+              if (exitCode === 0) resolve(undefined);
+              else reject(new Error(`unzip failed with code ${exitCode}`));
+            },
           },
-        });
+        );
       });
 
       // Clean up zip file
