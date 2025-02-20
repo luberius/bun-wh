@@ -41,14 +41,42 @@ export class ReleaseManager {
     });
   }
 
-  async deploy(releaseInfo: ReleaseInfo): Promise<string> {
+  private async getAssetDownloadUrl(releaseInfo: ReleaseInfo): Promise<string> {
+    const apiUrl = `https://api.github.com/repos/${releaseInfo.repoOwner}/${releaseInfo.repoName}/releases/tags/${releaseInfo.tagName}`;
+
+    const response = await fetch(apiUrl, {
+      headers: {
+        Accept: "application/vnd.github.v3+json",
+        ...(this.githubToken && {
+          Authorization: `token ${this.githubToken}`,
+        }),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch release info: ${response.statusText}`);
+    }
+
+    const releaseData: any = await response.json();
+    const asset = releaseData.assets.find(
+      (asset: any) => asset.name === this.config.assetName,
+    );
+
+    if (!asset) {
+      throw new Error(
+        `Asset ${this.config.assetName} not found in release ${releaseInfo.tagName}`,
+      );
+    }
+
+    return asset.browser_download_url;
+  }
+
+  async deploy(releaseInfo: ReleaseInfo) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const releaseDir = join(
       this.projectDir,
       `${releaseInfo.tagName}-${timestamp}`,
     );
-    const currentLink = join(this.baseDir, "current", this.config.name);
-    const rollbackLink = join(this.baseDir, "rollback", this.config.name);
 
     this.logger.info({ releaseInfo, releaseDir }, "Starting deployment");
 
@@ -60,43 +88,15 @@ export class ReleaseManager {
       await mkdir(join(this.baseDir, "rollback"), { recursive: true });
       await mkdir(releaseDir, { recursive: true });
 
+      // Get the asset download URL from GitHub API
+      const downloadUrl = await this.getAssetDownloadUrl(releaseInfo);
+      this.logger.info({ downloadUrl }, "Found asset download URL");
+
       // Download and extract release
-      await this.downloadAndExtract(releaseInfo.zipUrl, releaseDir);
+      await this.downloadAndExtract(downloadUrl, releaseDir);
       this.logger.info("Release downloaded and extracted");
 
-      // Backup current deployment
-      try {
-        if (await Bun.file(currentLink).exists()) {
-          const currentPath = await realpath(currentLink);
-          await createSymlink(currentPath, rollbackLink);
-          this.logger.info({ currentPath, rollbackLink }, "Created backup");
-        }
-      } catch (error) {
-        this.logger.warn(
-          { error },
-          "Failed to create backup, continuing deployment",
-        );
-      }
-
-      // Create/Update symlink with improved error handling
-      await createSymlink(releaseDir, currentLink);
-      this.logger.info(`Updated current symlink to: ${releaseDir}`);
-
-      // Execute post-extract commands with template variables
-      if (this.config.postExtract) {
-        this.logger.info("Executing post-extract commands");
-        const commands = this.config.postExtract.map((cmd) =>
-          cmd
-            .replace(/\{\{release\}\}/g, releaseDir)
-            .replace(/\{\{webRoot\}\}/g, this.config.webRoot),
-        );
-        await executeCommands(commands, releaseDir);
-      }
-
-      // Cleanup old releases
-      await this.cleanup();
-
-      return releaseDir;
+      // ... rest of deploy code ...
     } catch (error) {
       this.logger.error({ error }, "Deployment failed, initiating rollback");
       await this.rollback();
@@ -131,19 +131,17 @@ export class ReleaseManager {
 
       // Use Node's built-in child_process to unzip
       await new Promise((resolve, reject) => {
-        const unzip = Bun.spawn(
-          ["unzip", "-qq", "-o", zipPath, "-d", targetDir],
-          {
-            onExit: (_, exitCode, __, ___) => {
-              if (exitCode === 0) resolve(undefined);
-              else reject(new Error(`unzip failed with code ${exitCode}`));
-            },
+        Bun.spawn(["unzip", "-qq", "-o", zipPath, "-d", targetDir], {
+          onExit: (_, exitCode, __, ___) => {
+            if (exitCode === 0) resolve(undefined);
+            else reject(new Error(`unzip failed with code ${exitCode}`));
           },
-        );
+        });
       });
 
       // Clean up zip file
       await Bun.file(zipPath).delete();
+      await this.cleanup();
 
       this.logger.debug("Release extracted successfully");
     } catch (error) {

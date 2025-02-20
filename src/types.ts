@@ -5,6 +5,8 @@ export interface ReleaseInfo {
   isPrerelease: boolean;
   repositoryName: string;
   targetCommitish: string;
+  repoOwner: string;
+  repoName: string;
 }
 
 export interface ProjectConfig {
@@ -16,6 +18,7 @@ export interface ProjectConfig {
   postExtract?: string[];
   preRollback?: string[];
   branch?: string;
+  assetName: string;
 }
 
 export interface Config {
