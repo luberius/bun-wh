@@ -108,7 +108,7 @@ export class ReleaseManager {
     zipUrl: string,
     targetDir: string,
   ): Promise<void> {
-    this.logger.debug({ zipUrl, targetDir }, "Downloading release");
+    this.logger.info({ zipUrl, targetDir }, "Downloading release");
 
     const response = await fetch(zipUrl, {
       headers: this.githubToken
