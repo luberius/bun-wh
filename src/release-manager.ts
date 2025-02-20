@@ -202,7 +202,7 @@ export class ReleaseManager {
 
       for (const release of toRemove) {
         const releasePath = join(this.projectDir, release);
-        await Bun.file(releasePath).delete();
+        await rm(releasePath, { recursive: true, force: true });
         this.logger.info({ releasePath }, "Removed old release");
       }
     }
