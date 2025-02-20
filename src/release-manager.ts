@@ -68,7 +68,7 @@ export class ReleaseManager {
       );
     }
 
-    return asset.browser_download_url;
+    return asset.url;
   }
 
   async deploy(releaseInfo: ReleaseInfo) {
