@@ -109,28 +109,40 @@ export class ReleaseManager {
     targetDir: string,
   ): Promise<void> {
     this.logger.info({ zipUrl, targetDir }, "Downloading release");
-
-    const response = await fetch(zipUrl, {
-      headers: this.githubToken
-        ? {
-            Accept: "application/octet-stream",
-            Authorization: `token ${this.githubToken}`,
-          }
-        : {
-            Accept: "application/octet-stream",
-          },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to download release: ${response.statusText}`);
-    }
-
-    const zipBuffer = await response.arrayBuffer();
+    const zipPath = join(targetDir, this.config.asset);
 
     try {
-      // Create a temporary file for the zip
-      const zipPath = join(targetDir, this.config.asset);
-      await Bun.write(zipPath, zipBuffer);
+      // Build curl command with proper headers
+      const curlArgs = [
+        "curl",
+        "-L", // Follow redirects
+        "-o",
+        zipPath, // Output to file
+        "-s", // Silent mode
+        "-S", // Show errors
+      ];
+
+      // Add headers if GitHub token is present
+      if (this.githubToken) {
+        curlArgs.push("-H", `Authorization: token ${this.githubToken}`);
+      }
+      curlArgs.push("-H", "Accept: application/octet-stream");
+
+      // Add the URL
+      curlArgs.push(zipUrl);
+
+      // Execute curl command
+      await new Promise((resolve, reject) => {
+        Bun.spawn(curlArgs, {
+          onExit: (_, exitCode, __, ___) => {
+            if (exitCode === 0) {
+              resolve(undefined);
+            } else {
+              reject(new Error(`curl failed with code ${exitCode}`));
+            }
+          },
+        });
+      });
 
       // Use Node's built-in child_process to unzip
       await new Promise((resolve, reject) => {
