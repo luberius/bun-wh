@@ -105,66 +105,40 @@ export class ReleaseManager {
   }
 
   private async downloadAndExtract(
-    zipUrl: string,
+    downloadUrl: string,
     targetDir: string,
   ): Promise<void> {
-    this.logger.info({ zipUrl, targetDir }, "Downloading release");
-    const zipPath = join(targetDir, this.config.asset);
-
+    this.logger.debug({ downloadUrl, targetDir }, "Downloading release");
     try {
-      // Build curl command with proper headers
+      // Download and process pipeline
       const curlArgs = [
         "curl",
         "-L", // Follow redirects
-        "-J", // Use content-disposition filename
-        "-O", // Write output to a local file named as the remote file
-        "-s", // Silent mode
-        "-S", // Show errors
-        "--raw", // Disable all HTTP decoding
+        "-s", // Silent
       ];
 
-      // Add headers if GitHub token is present
-      if (this.githubToken) {
-        curlArgs.push("-H", `Authorization: token ${this.githubToken}`);
-      }
       curlArgs.push("-H", "Accept: application/octet-stream");
 
-      // Add the URL
-      curlArgs.push(zipUrl);
-
-      const logSafeCurlArgs = [...curlArgs];
       if (this.githubToken) {
-        const authIndex = logSafeCurlArgs.indexOf("-H") + 1;
-        logSafeCurlArgs[authIndex] = "Authorization: token [REDACTED]";
+        curlArgs.push("-H", `'Authorization: Bearer ${this.githubToken}'`);
       }
-      this.logger.info(`Executing curl command: ${logSafeCurlArgs.join(" ")}`);
+      curlArgs.push(downloadUrl);
 
-      // Execute curl command
+      // Use sed to strip everything before PK\x03\x04 (zip file magic number)
       await new Promise((resolve, reject) => {
-        Bun.spawn(curlArgs, {
-          onExit: (_, exitCode, __, ___) => {
-            if (exitCode === 0) {
-              resolve(undefined);
-            } else {
-              reject(new Error(`curl failed with code ${exitCode}`));
-            }
-          },
+        const curl = Bun.spawn(curlArgs, { stdout: "pipe" });
+        const sed = Bun.spawn(["sed", "-n", `'/PK\\x03\\x04/,$p'`], {
+          stdin: curl.stdout,
+          stdout: "pipe",
         });
-      });
-
-      // Use Node's built-in child_process to unzip
-      await new Promise((resolve, reject) => {
-        Bun.spawn(["unzip", "-qq", "-o", zipPath, "-d", targetDir], {
-          onExit: (_, exitCode, __, ___) => {
+        Bun.spawn(["unzip", "-qq", "-o", "-", "-d", targetDir], {
+          stdin: sed.stdout,
+          onExit: (_, exitCode, ___, __) => {
             if (exitCode === 0) resolve(undefined);
             else reject(new Error(`unzip failed with code ${exitCode}`));
           },
         });
       });
-
-      // Clean up zip file
-      await Bun.file(zipPath).delete();
-      await this.cleanup();
 
       this.logger.debug("Release extracted successfully");
     } catch (error) {
