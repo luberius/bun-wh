@@ -1,17 +1,16 @@
 {
     "webhookSecret": "your-webhook-secret",
     "githubToken": "your-github-token",
-    "baseDir": "/home/deploy/webhook",  // Base directory for all deployments
+    "baseDir": "/home/deploy/webhook",  // Base directory for webhook release
     "projects": {
         "project1": {
             "name": "Project One",
             "githubRepo": "owner/repo",
-            "webRoot": "/var/www/project1",  // Where to symlink the public files
+            "webRoot": "/var/www/project1",  // Where to deploy your app 
             "keepReleases": 5,
+            "asset": "release.zip",
             "postExtract": [
-                "ln -sfn {{release}}/public {{webRoot}}",
-                "chmod -R 755 {{release}}",
-                "chown -R www-data:www-data {{webRoot}}"
+                "php artisan migrate"
             ],
             "preRollback": [
                 "php artisan down"
@@ -23,10 +22,10 @@
             "githubRepo": "owner/another-repo",
             "webRoot": "/var/www/project2",
             "keepReleases": 3,
+            "asset": "release.zip",
             "postExtract": [
                 "npm ci",
                 "npm run build",
-                "ln -sfn {{release}}/dist {{webRoot}}",
                 "pm2 restart app"
             ],
             "branch": "production"
