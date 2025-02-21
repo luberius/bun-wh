@@ -144,7 +144,7 @@ export class ReleaseManager {
 
       // Step 2: Process with sed to strip before ZIP header and after boundary end
       await new Promise((resolve, reject) => {
-        Bun.spawn(["sed", "-i", "-n", `'/PK\\x03\\x04/,/^--/p'`, zipPath], {
+        Bun.spawn(["sed", "-i", "-n", `/PK\\x03\\x04/,/^--/p`, zipPath], {
           onExit: (_, exitCode, __, ___) => {
             if (exitCode === 0) resolve(undefined);
             else reject(new Error(`sed failed with code ${exitCode}`));
