@@ -27,3 +27,8 @@ export interface Config {
   githubToken?: string;
   baseDir: string;
 }
+
+export interface CopyOptions {
+  replace?: boolean;
+  clearDestination?: boolean;
+}
