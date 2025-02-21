@@ -116,10 +116,11 @@ export class ReleaseManager {
       const curlArgs = [
         "curl",
         "-L", // Follow redirects
-        "-o",
-        zipPath, // Output to file
+        "-J", // Use content-disposition filename
+        "-O", // Write output to a local file named as the remote file
         "-s", // Silent mode
         "-S", // Show errors
+        "--raw", // Disable all HTTP decoding
       ];
 
       // Add headers if GitHub token is present
@@ -130,6 +131,13 @@ export class ReleaseManager {
 
       // Add the URL
       curlArgs.push(zipUrl);
+
+      const logSafeCurlArgs = [...curlArgs];
+      if (this.githubToken) {
+        const authIndex = logSafeCurlArgs.indexOf("-H") + 1;
+        logSafeCurlArgs[authIndex] = "Authorization: token [REDACTED]";
+      }
+      this.logger.info(`Executing curl command: ${logSafeCurlArgs.join(" ")}`);
 
       // Execute curl command
       await new Promise((resolve, reject) => {
