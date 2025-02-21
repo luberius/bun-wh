@@ -113,9 +113,12 @@ export class ReleaseManager {
     const response = await fetch(zipUrl, {
       headers: this.githubToken
         ? {
+            Accept: "application/octet-stream",
             Authorization: `token ${this.githubToken}`,
           }
-        : {},
+        : {
+            Accept: "application/octet-stream",
+          },
     });
 
     if (!response.ok) {
