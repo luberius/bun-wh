@@ -109,37 +109,60 @@ export class ReleaseManager {
     targetDir: string,
   ): Promise<void> {
     this.logger.debug({ downloadUrl, targetDir }, "Downloading release");
+
+    const zipPath = join(targetDir, "release.zip");
+
     try {
-      // Download and process pipeline
+      // Step 1: Download with curl
       const curlArgs = [
         "curl",
         "-L", // Follow redirects
         "-s", // Silent
+        "-H",
+        "'Accept: application/octet-stream'",
+        "-o",
+        zipPath,
       ];
-
-      curlArgs.push("-H", "Accept: application/octet-stream");
-
       if (this.githubToken) {
         curlArgs.push("-H", `'Authorization: Bearer ${this.githubToken}'`);
       }
+
       curlArgs.push(downloadUrl);
 
-      // Use sed to strip everything before PK\x03\x04 (zip file magic number)
+      // Execute download
       await new Promise((resolve, reject) => {
-        const curl = Bun.spawn(curlArgs, { stdout: "pipe" });
-        const sed = Bun.spawn(["sed", "-n", `'/PK\\x03\\x04/,$p'`], {
-          stdin: curl.stdout,
-          stdout: "pipe",
+        Bun.spawn(curlArgs, {
+          onExit: (_, exitCode, __, ___) => {
+            if (exitCode === 0) {
+              resolve(undefined);
+            } else {
+              reject(new Error(`curl failed with code ${exitCode}`));
+            }
+          },
         });
-        Bun.spawn(["unzip", "-qq", "-o", "-", "-d", targetDir], {
-          stdin: sed.stdout,
-          onExit: (_, exitCode, ___, __) => {
+      });
+
+      // Step 2: Process with sed to strip before ZIP header and after boundary end
+      await new Promise((resolve, reject) => {
+        Bun.spawn(["sed", "-i", "-n", `'/PK\\x03\\x04/,/^--/p'`, zipPath], {
+          onExit: (_, exitCode, __, ___) => {
+            if (exitCode === 0) resolve(undefined);
+            else reject(new Error(`sed failed with code ${exitCode}`));
+          },
+        });
+      });
+
+      // Step 3: Extract
+      await new Promise((resolve, reject) => {
+        Bun.spawn(["unzip", "-qq", "-o", zipPath, "-d", targetDir], {
+          onExit: (_, exitCode, __, ___) => {
             if (exitCode === 0) resolve(undefined);
             else reject(new Error(`unzip failed with code ${exitCode}`));
           },
         });
       });
-
+      // Clean up zip file
+      await Bun.file(zipPath).delete();
       this.logger.debug("Release extracted successfully");
     } catch (error) {
       this.logger.error({ error }, "Failed to extract release");
